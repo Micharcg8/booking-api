@@ -1,0 +1,27 @@
+# Markdown (managed manually for now; remove to track README.md etc.)
+*.md
+
+# Build results
+bin/
+obj/
+
+# User-specific
+*.user
+*.suo
+.vs/
+
+# Rider
+.idea/
+
+# NuGet
+*.nupkg
+.nuget/packages/
+
+# Test / coverage
+coverage/
+*.trx
+*.coverage
+
+# Local settings (secrets, overrides)
+appsettings.Development.local.json
+*.local.json
