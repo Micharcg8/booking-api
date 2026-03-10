@@ -1,4 +1,13 @@
+using Serilog;
+using Serilog.AspNetCore;
+
 var builder = WebApplication.CreateBuilder(args);
+
+// Serilog: structured logging from configuration
+builder.Host.UseSerilog((context, services, configuration) => configuration
+    .ReadFrom.Configuration(context.Configuration)
+    .Enrich.FromLogContext()
+    .Enrich.WithProperty("Application", context.HostingEnvironment.ApplicationName));
 
 // Add services to the container.
 builder.Services.AddControllers();
@@ -13,6 +22,8 @@ builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseSerilogRequestLogging();
+
 app.UseSwagger();
 app.UseSwaggerUI();
 

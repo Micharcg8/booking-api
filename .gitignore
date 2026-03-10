@@ -5,6 +5,9 @@
 bin/
 obj/
 
+# Logs
+logs/
+
 # User-specific
 *.user
 *.suo
