@@ -10,7 +10,12 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
     .Enrich.WithProperty("Application", context.HostingEnvironment.ApplicationName));
 
 // Add services to the container.
-builder.Services.AddControllers();
+builder.Services.AddSingleton<Booking.Api.Services.InMemoryHoldStore>();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+    });
 
 // CORS for frontend (e.g. Angular on localhost:4200)
 builder.Services.AddCors(options =>
