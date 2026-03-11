@@ -1,6 +1,7 @@
 using Booking.Api.Services;
 using Booking.Contracts.Availability;
 using Booking.Contracts.Booking;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Booking.Api.Controllers;
@@ -11,6 +12,7 @@ namespace Booking.Api.Controllers;
 [ApiController]
 [Route("api/bookings")]
 [Produces("application/json")]
+[Authorize]
 public class BookingController : ControllerBase
 {
     private readonly InMemoryBookingStore _bookingStore;

@@ -1,3 +1,6 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using Serilog.AspNetCore;
 
@@ -13,6 +16,7 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 builder.Services.AddSingleton<Booking.Api.Services.InMemoryHoldStore>();
 builder.Services.AddSingleton<Booking.Api.Services.InMemoryBookingStore>();
 builder.Services.AddSingleton<Booking.Api.Services.InMemoryPaymentStore>();
+builder.Services.AddSingleton<Booking.Api.Services.IdempotencyStore>();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
@@ -33,7 +37,31 @@ builder.Services.AddCors(options =>
     });
 });
 
-// Swagger / OpenAPI
+// JWT authentication
+var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "booking-api";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "booking-fe";
+if (!string.IsNullOrEmpty(jwtKey) && jwtKey.Length >= 32)
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(options =>
+        {
+            options.TokenValidationParameters = new TokenValidationParameters
+            {
+                ValidateIssuer = true,
+                ValidateAudience = true,
+                ValidateLifetime = true,
+                ValidateIssuerSigningKey = true,
+                ValidIssuer = jwtIssuer,
+                ValidAudience = jwtAudience,
+                IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+                ClockSkew = TimeSpan.FromMinutes(1)
+            };
+        });
+    builder.Services.AddAuthorization();
+}
+
+// Swagger / OpenAPI (Bearer auth supported; add token via Authorization header)
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
@@ -43,6 +71,7 @@ builder.Services.AddHealthChecks();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+app.UseMiddleware<Booking.Api.Middleware.CorrelationIdMiddleware>();
 app.UseSerilogRequestLogging();
 
 app.UseSwagger();
@@ -52,6 +81,7 @@ app.UseCors();
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 // Minimal test endpoint to validate host

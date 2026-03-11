@@ -1,6 +1,7 @@
 using Booking.Api.Services;
 using Booking.Contracts.Booking;
 using Booking.Contracts.Payments;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace Booking.Api.Controllers;
@@ -11,20 +12,24 @@ namespace Booking.Api.Controllers;
 [ApiController]
 [Route("api/payments")]
 [Produces("application/json")]
+[Authorize]
 public class PaymentsController : ControllerBase
 {
     private readonly InMemoryPaymentStore _paymentStore;
     private readonly InMemoryBookingStore _bookingStore;
     private readonly InMemoryHoldStore _holdStore;
+    private readonly IdempotencyStore _idempotencyStore;
 
     public PaymentsController(
         InMemoryPaymentStore paymentStore,
         InMemoryBookingStore bookingStore,
-        InMemoryHoldStore holdStore)
+        InMemoryHoldStore holdStore,
+        IdempotencyStore idempotencyStore)
     {
         _paymentStore = paymentStore;
         _bookingStore = bookingStore;
         _holdStore = holdStore;
+        _idempotencyStore = idempotencyStore;
     }
 
     /// <summary>
@@ -64,6 +69,7 @@ public class PaymentsController : ControllerBase
 
     /// <summary>
     /// Simulated payment callback/webhook from the payment provider.
+    /// Optional Idempotency-Key header: same key returns 204 without re-processing.
     /// </summary>
     /// <param name="paymentId">Payment identifier.</param>
     /// <param name="status">Result status: Succeeded or Failed.</param>
@@ -73,25 +79,23 @@ public class PaymentsController : ControllerBase
     [ProducesResponseType(StatusCodes.Status404NotFound)]
     public IActionResult Callback(string paymentId, [FromQuery] string status)
     {
+        var idempotencyKey = Request.Headers["Idempotency-Key"].FirstOrDefault();
+        if (!string.IsNullOrWhiteSpace(idempotencyKey) && _idempotencyStore.HasBeenProcessed(idempotencyKey))
+            return NoContent();
+
         var entry = _paymentStore.Get(paymentId);
         if (entry is null)
-        {
             return NotFound();
-        }
 
         if (!Enum.TryParse<PaymentStatus>(status, ignoreCase: true, out var paymentStatus) ||
             (paymentStatus != PaymentStatus.Succeeded && paymentStatus != PaymentStatus.Failed))
-        {
             return BadRequest("Status must be Succeeded or Failed.");
-        }
 
         _paymentStore.UpdateStatus(paymentId, paymentStatus);
 
         var booking = _bookingStore.Get(entry.BookingId);
         if (booking == null)
-        {
             return NotFound();
-        }
 
         if (paymentStatus == PaymentStatus.Succeeded)
         {
@@ -103,6 +107,9 @@ public class PaymentsController : ControllerBase
             _bookingStore.UpdateStatus(booking.BookingId, BookingStatus.Cancelled, PaymentStatus.Failed);
             _holdStore.Release(booking.HoldId);
         }
+
+        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+            _idempotencyStore.TryMarkProcessed(idempotencyKey);
 
         return NoContent();
     }
