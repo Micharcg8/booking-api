@@ -1,7 +1,9 @@
 using System.Net;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Booking.Contracts.Auth;
 using Booking.Contracts.Availability;
 using Booking.Contracts.Booking;
 using Booking.Contracts.Payments;
@@ -10,7 +12,7 @@ using Xunit;
 
 namespace Booking.IntegrationTests;
 
-public class BookingPaymentWorkflowTests : IClassFixture<WebApplicationFactory<Program>>
+public class BookingPaymentWorkflowTests : IClassFixture<CustomWebApplicationFactory>
 {
     private readonly HttpClient _client;
     private static readonly JsonSerializerOptions JsonOptions = new()
@@ -19,14 +21,32 @@ public class BookingPaymentWorkflowTests : IClassFixture<WebApplicationFactory<P
         Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: true) }
     };
 
-    public BookingPaymentWorkflowTests(WebApplicationFactory<Program> factory)
+    public BookingPaymentWorkflowTests(CustomWebApplicationFactory factory)
     {
         _client = factory.CreateClient();
+    }
+
+    private string? _bearerToken;
+
+    private async Task EnsureAuthenticatedAsync()
+    {
+        var tokenResponse = await _client.PostAsync("/api/auth/token", null);
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            var body = await tokenResponse.Content.ReadAsStringAsync();
+            throw new InvalidOperationException($"Token endpoint returned {tokenResponse.StatusCode}: {body}");
+        }
+        var tokenResult = await tokenResponse.Content.ReadFromJsonAsync<TokenResponse>(JsonOptions);
+        Assert.NotNull(tokenResult);
+        Assert.False(string.IsNullOrEmpty(tokenResult!.Token));
+        _bearerToken = tokenResult.Token;
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", _bearerToken);
     }
 
     [Fact]
     public async Task SuccessfulPaymentFlow_ConfirmsBooking_AndConvertsHold()
     {
+        await EnsureAuthenticatedAsync();
         // Arrange: create a hold
         var holdResponse = await _client.PostAsJsonAsync("/api/holds", new { TripId = "trip-1", Passengers = 1 });
         holdResponse.EnsureSuccessStatusCode();
@@ -84,6 +104,7 @@ public class BookingPaymentWorkflowTests : IClassFixture<WebApplicationFactory<P
     [Fact]
     public async Task FailedPaymentFlow_CancelsBooking_AndReleasesHold()
     {
+        await EnsureAuthenticatedAsync();
         // Arrange: create a hold
         var holdResponse = await _client.PostAsJsonAsync("/api/holds", new { TripId = "trip-2", Passengers = 1 });
         holdResponse.EnsureSuccessStatusCode();
