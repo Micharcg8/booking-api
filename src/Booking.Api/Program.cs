@@ -11,10 +11,15 @@ builder.Host.UseSerilog((context, services, configuration) => configuration
 
 // Add services to the container.
 builder.Services.AddSingleton<Booking.Api.Services.InMemoryHoldStore>();
+builder.Services.AddSingleton<Booking.Api.Services.InMemoryBookingStore>();
+builder.Services.AddSingleton<Booking.Api.Services.InMemoryPaymentStore>();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>
     {
-        options.JsonSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter(
+                System.Text.Json.JsonNamingPolicy.CamelCase,
+                allowIntegerValues: true));
     });
 
 // CORS for frontend (e.g. Angular on localhost:4200)

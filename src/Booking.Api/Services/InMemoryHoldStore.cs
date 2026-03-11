@@ -55,6 +55,17 @@ public class InMemoryHoldStore
         }
     }
 
+    public void MarkConvertedToBooking(string holdId)
+    {
+        lock (_lock)
+        {
+            if (_holds.TryGetValue(holdId, out var entry) && entry.Status == HoldStatus.Active)
+            {
+                entry.Status = HoldStatus.ConvertedToBooking;
+            }
+        }
+    }
+
     private class HoldEntry
     {
         public required string TripId { get; init; }

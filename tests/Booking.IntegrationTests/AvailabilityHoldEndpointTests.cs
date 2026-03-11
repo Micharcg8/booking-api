@@ -1,5 +1,7 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Booking.Contracts.Availability;
 using Xunit;
@@ -9,6 +11,11 @@ namespace Booking.IntegrationTests;
 public class AvailabilityHoldEndpointTests : IClassFixture<WebApplicationFactory<Program>>
 {
     private readonly HttpClient _client;
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        Converters = { new JsonStringEnumConverter(JsonNamingPolicy.CamelCase, allowIntegerValues: true) }
+    };
 
     public AvailabilityHoldEndpointTests(WebApplicationFactory<Program> factory)
     {
@@ -34,7 +41,7 @@ public class AvailabilityHoldEndpointTests : IClassFixture<WebApplicationFactory
         var response = await _client.PostAsJsonAsync("/api/holds", request);
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        var hold = await response.Content.ReadFromJsonAsync<CreateHoldResponse>();
+        var hold = await response.Content.ReadFromJsonAsync<CreateHoldResponse>(JsonOptions);
         Assert.NotNull(hold);
         Assert.NotNull(hold.HoldId);
         Assert.Equal("trip-1", hold.TripId);
@@ -48,12 +55,12 @@ public class AvailabilityHoldEndpointTests : IClassFixture<WebApplicationFactory
         var request = new CreateHoldRequest { TripId = "trip-2" };
         var createResponse = await _client.PostAsJsonAsync("/api/holds", request);
         createResponse.EnsureSuccessStatusCode();
-        var created = await createResponse.Content.ReadFromJsonAsync<CreateHoldResponse>();
+        var created = await createResponse.Content.ReadFromJsonAsync<CreateHoldResponse>(JsonOptions);
         Assert.NotNull(created);
 
         var getResponse = await _client.GetAsync($"/api/holds/{created.HoldId}");
         getResponse.EnsureSuccessStatusCode();
-        var hold = await getResponse.Content.ReadFromJsonAsync<HoldDto>();
+        var hold = await getResponse.Content.ReadFromJsonAsync<HoldDto>(JsonOptions);
         Assert.NotNull(hold);
         Assert.Equal(created.HoldId, hold.HoldId);
         Assert.Equal(HoldStatus.Active, hold.Status);
